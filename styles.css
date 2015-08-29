@@ -3,3 +3,15 @@
 /* Note: an asteroid image is included in this repo.
 Feel free to use it if you like. */
 
+.board {
+  width: 1000px;
+  height: 600px;
+  padding: 20px;
+  background-color: #d9dddb;
+  display: block;
+}
+
+svg {
+/*  padding: 100px;*/
+  background-color: #000000;
+}
