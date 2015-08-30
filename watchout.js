@@ -51,8 +51,8 @@ var updateEnemy = function(data) {
     cy = d3.select(this).attr("cy");
 
     d3.select(this).transition()
-                   .duration(1000)
-                   //.duration(level("hard"))
+                   // .duration(1000)
+                   .duration(level("nightmare"))
                    .attr("r", function(d){return d[2];})
                    .attr("transform", "translate("+ random(width, 0, cx)+ "," + random(height, 0, cy)+ ")");
   });
@@ -182,7 +182,7 @@ var highlight = function(){
   setTimeout(unhighlight, 3000);
 };
 
-setInterval(highlight, 3000);
+setInterval(highlight, 4000);
 
 d3.selectAll(".highlight").on("click", function(){
   //console.log("clicked blue");
