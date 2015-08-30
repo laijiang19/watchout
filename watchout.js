@@ -111,7 +111,7 @@ var updatePlayer = function(data){
         .duration(50)
         .attr("cx", function(d) {return d[0]})
         .attr("cy", function(d) {return d[1]})
-        .attr("fill", function(d) {return "rgb(" + 90 + ","+ Math.floor(d[1]/4) + "," + Math.floor(d[0]/4) + ")"});
+        .attr("fill", function(d) {return "rgb(" + Math.floor(d[1]/4) + "," + 200 + "," + Math.floor(d[0]/4) + ")"});
 };
 
 var started = false;
