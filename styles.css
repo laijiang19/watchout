@@ -29,7 +29,7 @@ svg {
   /*  padding: 100px;*/
   /*  width: 1000px;
   height: 600px;*/
-  background-color: rgb(10, 10, 10);
+/*  background-color: rgb(10, 10, 10);*/
   border-radius: 10px;
 }
 circle {
@@ -41,8 +41,8 @@ circle {
   stroke: white;
 }
 .highlight {
-  fill: rgb(255, 80, 80);
-  stroke: white;
+/*  fill: rgb(255, 80, 80);*/
+/*  stroke: white;*/
   r: 30;
 }
 .player {
