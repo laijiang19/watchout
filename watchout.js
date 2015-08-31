@@ -1,64 +1,108 @@
-
 var width = 1000;
 var height = 600;
-var numEne = 20;
+var numEne = 25;
 var generated = false;
+var gameStarted = false;
+var gameTimer, scoreTimer, highlightTimer;
+var collision = 0;
+var mouseColliding = false;
+var score = 0;
 var highscore = 0;
-var ptdata = [];
 
-var setBoard = function(){
+// function to set the gameboard
+var setBoard = function(width, height){
   return d3.select(".board").append("svg")
     .attr("width", width)
     .attr("height", height)
+    .style("background-color", 'rgb(10, 10, 10)')
     .append("g");
 };
 
-var svg = setBoard();
+// generate player
+var generatePlayer = function(data){
+  var player = d3.select(".board").select('svg').selectAll('circle').data(data);
+  player.enter().append('circle')
+            .transition()
+            .attr("cx", function(d){return d[0]})
+            .attr("cy", function(d){return d[1]})
+            .attr("r", 15)
+            .attr("class", "player")
+            .attr("fill", "white");
 
-var generateEnemy = function(data) { //[[0,1,2]]
-
-  var circles = svg.selectAll('circle').data(data);
-
-  circles.enter().append('circle')
-                 .transition()
-                 .attr("cx", function(d){return d[0];})
-                 .attr("cy", function(d){return d[1];})
-                 .attr("r", function(d){return d[2];})
-                 .attr("class", "enemy")
-                 .attr("fill", "none");
-};
-
-//creates duration speed based on level
-// var durs = 
-var level = function (level) {
-  if (level === "easy") {
-    return 3000;
-  }
-  else if (level === "hard"){
-    return 500;
-  }
-  else if (level === "nightmare"){
-    return random(500, 500);
-  }
-};
-
-var updateEnemy = function(data) {
-  var circles = svg.selectAll('circle').data(data);
-  var cx, cy;
-
-  circles.each(function (d, i) {
-    cx = d3.select(this).attr("cx");
-    cy = d3.select(this).attr("cy");
-
-    d3.select(this).transition()
-                   // .duration(1000)
-                   .duration(level("nightmare"))
-                   .attr("r", function(d){return d[2];})
-                   .attr("transform", "translate("+ random(width, 0, cx)+ "," + random(height, 0, cy)+ ")");
+  // update event listener to listen to the click event           
+  player.on('click', function(){
+    if(!gameStarted){
+      gameStarted = true;
+      updateData();
+      gameTimer = setInterval(updateData, 2000);
+      scoreTimer = setInterval(updateScore, 1000);
+      highlightTimer = setInterval(highlight, random(4000, 2000));
+    }
+    else {
+      clearInterval(gameTimer);
+      clearInterval(scoreTimer);
+      clearInterval(highlightTimer);
+      d3.select('path').remove();
+      gameStarted = false;
+      d3.select(this).transition().duration(1000).attr('fill', 'white');
+    }
   });
 };
 
-var timer = function(){
+// invoke the setBoard function to set the board and player
+var board = setBoard(width, height);
+var player = generatePlayer([[width/2, height/2]]);
+
+// update player
+var updatePlayer = function(data){
+  var player = d3.select(".board").select('svg').selectAll('.player').data(data);
+  player.transition()
+        .duration(90)
+        .attr("cx", function(d) {return d[0]})
+        .attr("cy", function(d) {return d[1]})
+        .attr("fill", function(d) {return "rgb(" + Math.floor(d[1]/4) + "," + 200 + "," + Math.floor(d[0]/4) + ")"});
+};
+
+// generate and update enemy
+var updateEnemy = function(data) {
+  var circles = board.select('g').selectAll('circle').data(data);
+  var enemies = board.selectAll('.enemy');
+  var highlight = board.selectAll('.highlight');
+  var player = d3.selectAll('.player');
+  var cx, cy;
+
+  // generate enemy if not generated; else update
+  if (!generated){ 
+    generated = true;
+    circles.enter().append('circle')
+                   .transition()
+                   .delay(500)
+                   .duration(1000)
+                   .attr('opacity', 1)
+                   .attr("cx", function(d){return d[0];})
+                   .attr("cy", function(d){return d[1];})
+                   .attr("r", function(d){return d[2];})
+                   .attr("class", "enemy")
+                   .attr("colliding", false)
+                   .attr("fill", "none");  
+  }
+  else { 
+    enemies.each(function(d, i){
+      // update enemy position and size
+      d3.select(this).transition()
+                     .duration(1000)
+                     .tween('custom', tweenCollision)
+                     // .duration(level("nightmare"))
+                     .attr("r", function(d){return d[2];});
+                   });
+  }
+  highlight.each(function(d, i){
+    d3.select(this).transition().duration(1000)
+                   .tween('custom', tweenCollision);
+  });
+};
+
+var updateData = function(){
   var data = [];
   for (var i = 0; i <= numEne; i++) {
     var temp = [];
@@ -66,22 +110,40 @@ var timer = function(){
     temp.push(random(height - 40, 20));
     temp.push(random(10, 5));
     data.push(temp);
-
-    if (generated){
-      updateEnemy(data);
-    }
-    else {
-      generateEnemy(data);
-    }
   }
-  generated = true;
+  updateEnemy(data);
 };
 
-Player([[width/2, height/2]]);
 
-setInterval(timer, 1500);
+// ------- gloabl event listeners -------
+// check board for mousemove event to update the player
+d3.select('.board').on('mousemove', function(){
+  if (gameStarted) {
+    // get current mouse position info
+    var x = d3.mouse(this)[0];
+    var y = d3.mouse(this)[1];
+    var newPosition = [[x, y]];
+    var circles = d3.select('g').selectAll('circle');
+    var player = d3.select('.player');
 
-function random (n, m, curr) { //(attr)
+    // update player position
+    updatePlayer(newPosition);
+
+    // invoke tick function to draw a dotted path
+    d3.select('svg').on('mousemove', function(){
+      tick(d3.mouse(this), x, y);
+    });
+
+    // check collision on every enemy element
+    circles.each(function(){
+      checkCollision(d3.select(this), player);
+    });
+  }
+});
+
+//------- helper function below --------
+// helper function to generate random numbers 
+function random(n, m, curr) {
   n = n || 1;
   m = m || 0;
   if(curr !== undefined){
@@ -90,120 +152,127 @@ function random (n, m, curr) { //(attr)
   return Math.random() * n + m;
 }
 
-function Player(data){
-  var player = d3.select(".board").select('svg').selectAll('circle').data(data);
+// helper function to pass in updatePlayer's tween method
+function tweenCollision(d) {
+  // tween helper function - keyword 'this' is refered to the element being transitioned
+  var enemy = d3.select(this);
+  var colliding = enemy.attr('colliding');
+  var player = d3.select('.player');
+  var startPos = {
+    x: parseFloat(enemy.attr('cx')),
+    y: parseFloat(enemy.attr('cy'))
+  };
 
-  //generate player
-  player.enter().append('circle')
-                .transition()
-                .attr("cx", function(d){return d[0]})
-                .attr("cy", function(d){return d[1]})
-                .attr("r", 15)
-                .attr("class", "player")
-                .attr("fill", "white");
+  var endPos = {
+    x: random(width),
+    y: random(height)
+  };
+  return function(t) {
+    var enemyNextPos;
+    if (colliding === 'false' && enemy.attr('class' !== 'highlight')){
+      checkCollision(enemy, player);
+    }
+    enemyNextPos = {
+      x: startPos.x + (endPos.x - startPos.x) * t,
+      y: startPos.y + (endPos.y - startPos.y) * t
+    };
+    return enemy.attr('cx', enemyNextPos.x).attr('cy', enemyNextPos.y);
+  };
 }
 
-var updatePlayer = function(data){
-  var player = d3.select(".board").select('svg').selectAll('.player').data(data);
-  console.table(data);
+function checkCollision(enemy, player){
+  var enemyPos = {
+    x: parseFloat(enemy.attr('cx')),
+    y: parseFloat(enemy.attr('cy')),
+    r: parseFloat(enemy.attr('r')),
+    colliding: enemy.attr('colliding'),
+    'class': enemy.attr('class')
+  };
+  var playerPos = {
+    x: parseFloat(player.attr('cx')),
+    y: parseFloat(player.attr('cy')),
+    r: parseFloat(enemy.attr('r'))
+  };
 
-  player.transition()
-        .duration(50)
-        .attr("cx", function(d) {return d[0]})
-        .attr("cy", function(d) {return d[1]})
-        .attr("fill", function(d) {return "rgb(" + Math.floor(d[1]/4) + "," + 200 + "," + Math.floor(d[0]/4) + ")"});
-};
-
-var started = false;
-var collision = 0;
-var score = 0;
-
-// get coordinates of mouse
-d3.selectAll(".board").on("mousemove", function(){
-  if (started) {
-    var coordinates = [0, 0];
-    coordinates = d3.mouse(this);
-    var x = coordinates[0] - 15;
-    var y = coordinates[1];
-    var data = [[x, y]];
-    updatePlayer(data);
-    var xCheck; 
-    var yCheck;
-    var dist;
-
-    d3.select('body').select('svg').on('mousemove', function(){
-      tick(d3.mouse(this), x, y);
-    });
-
-    d3.selectAll(".enemy").each(function(){
-      xCheck = Math.abs(d3.select(this).attr("cx") - coordinates[0]);
-      yCheck = Math.abs(d3.select(this).attr("cy") - coordinates[1]);
-      // dist = Math.sqrt(Math.pow(xCheck - x, 2) + Math.pow(yCheck - y, 2));
-      if ( Math.abs(xCheck - x) <= 15 && Math.abs(yCheck - y) <= 15) {
-        collision ++;
-        d3.selectAll('.collisions').select('span').html(collision);
-        score--;
-        d3.selectAll('.current').select('span').html(score);
+  if (Math.pow(enemyPos.x - playerPos.x, 2) + Math.pow(enemyPos.y - playerPos.y, 2) < Math.pow(enemyPos.r + playerPos.r, 2)){
+    if (enemyPos.colliding === 'false'){
+      if (enemyPos['class'] === 'enemy'){ 
+        collision++;
+        //set background color to red if collision happens
+        d3.select('.board').select('svg').transition().duration(150).style('background-color', 'rgb(200, 0, 50)');
+        updateCollision();
+        enemy.attr('colliding', true);
       }
-      if (collision >= 10){
-        highscore = highscore > score ? highscore : score;
-        d3.selectAll('.high').select('span').html(highscore);
-        score = 0;
-        d3.selectAll('.current').select('span').html(score);
-        collision = 0;
-        d3.selectAll('.collisions').select('span').html(collision);
+      else if (enemyPos['class'] === 'highlight') {
+        score += 100;
+        enemy.attr('colliding', true);
+        enemy.style('display', 'none');
       }
-    });
+    }
   }
-});
-
-d3.select(".board").on("click", function(){
-  if (!started){
-    setInterval(updateScore, 500);
+  else {
+    enemy.attr('colliding', false);
+    //set background color back if no collision
+    d3.select('.board').select('svg').transition().delay(100).duration(50).style('background-color', 'rgb(10, 10, 10)');
   }
-  started = true;
-});
+}
 
-var updateScore = function(){
+function updateScore(){
   score++;
-  d3.selectAll('.current').select('span').html(score);
-};
+  d3.select('.current').select('span').html(score);
+}
 
-var highlight = function(){
+function updateCollision(){
+  if (collision >= 10){
+    if (score > highscore){
+      highscore = score;
+      d3.select('.high').select('span').html(highscore);
+    }
+    score = 0;
+    collision = 0; 
+    d3.select('g').selectAll('circle').style('display', 'inline-block').attr('class', 'enemy');
+  }
+  d3.select('.collisions').select('span').html(collision);
+}
+
+function highlight(){
   var enemyArray = d3.selectAll(".enemy");
   var length = enemyArray[0].length - 1;
   var random = Math.floor(Math.random() * length);
+  var r = Math.floor(Math.random() * 256);
+  var g = Math.floor(Math.random() * 256);
+  var b = Math.floor(Math.random() * 256);
   d3.select(enemyArray[0][random]).transition()
-    .attr("class", "highlight");
-    // .attr("fill", "rgb(" + Math.floor(Math.random() * 256) + "," + Math.floor(Math.random() * 256) + ", " + Math.floor(Math.random() * 256) + ")");
-  var unhighlight = function(){
-    d3.select(enemyArray[0][random]).transition().attr("class", "enemy");
-  };
-  setTimeout(unhighlight, 3000);
-};
+    .duration(1000)
+    .attr("class", "highlight")
+    .attr("stroke", "white")
+    .attr("r", 25)
+    .attr("fill", "rgb(" + r + "," + g + ", " + b + ")");
+  setTimeout(function(){
+    return unhighlight(enemyArray[0][random]);
+  }, 1000);
+}
 
-setInterval(highlight, 4000);
+function unhighlight(element){
+  element.transition().duration(1000).attr("class", "enemy");
+}
 
-d3.selectAll(".highlight").on("click", function(){
-  //console.log("clicked blue");
-  d3.select(this).exit().remove();
-});
+//------- generated dotted path helper functions and vars --------
+var ptdata = [];
 
 var line = d3.svg.line()
     .interpolate("basis")
     .x(function(d, i) { return d[0]; })
     .y(function(d, i) { return d[1]; });
 
-var path = svg.append("g")
+var path = board.append("g")
   .append("path")
     .data([ptdata])
     .attr("class", "line")
     .attr("d", line);
 
 function tick(pt, x, y) {
-
   ptdata.push(pt);
-
   path.attr("d", function(d) { return line(d);})
       .attr("stroke", "rgb(" + Math.floor(x/4) + ", "  + 160 + ", " + Math.floor(y/4) + ")");
   if (ptdata.length > 100) {
